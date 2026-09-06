@@ -1,0 +1,182 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC",
+    ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Quicksand", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    ui-rounded, sans-serif;
+
+  --color-cream-50: #fdfbf6;
+  --color-cream-100: #faf4ea;
+  --color-cream-200: #f1e7d7;
+  --color-cream-300: #e4d5bc;
+
+  --color-ink-900: #352e26;
+  --color-ink-700: #51473b;
+  --color-ink-500: #7a6f60;
+  --color-ink-400: #9a8f80;
+  --color-ink-300: #bdb3a4;
+
+  --color-wood-400: #c99a6b;
+  --color-wood-500: #b07f4f;
+  --color-wood-600: #94683c;
+  --color-wood-700: #78532f;
+
+  --color-leaf-100: #dceed8;
+  --color-leaf-300: #9cd7a4;
+  --color-leaf-500: #49a96b;
+  --color-leaf-600: #36895a;
+  --color-leaf-700: #2c6f48;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 92px;
+}
+
+body {
+  background-color: var(--color-cream-50);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background-color: #fcd34d;
+  color: #4a3728;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #d8ccb8;
+  border-radius: 999px;
+  border: 2px solid var(--color-cream-50);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #c6b79e;
+}
+
+/* 滚动进入视口时的浮现动画 */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 待办划掉动画：背景色描线从 0 长到 100% */
+.task-text {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 62%;
+  background-size: 0% 1.5px;
+  transition:
+    background-size 0.35s ease,
+    color 0.35s ease;
+}
+.task-row.is-done .task-text {
+  background-size: 100% 1.5px;
+  color: var(--color-ink-400);
+}
+
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(2deg);
+  }
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+@keyframes check-pop {
+  0% {
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-floaty {
+  animation: floaty 7s ease-in-out infinite;
+}
+.animate-fade-up {
+  animation: fade-up 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.animate-pop-in {
+  animation: pop-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.animate-wiggle {
+  animation: wiggle 1.4s ease-in-out infinite;
+}
+.animate-twinkle {
+  animation: twinkle 2.6s ease-in-out infinite;
+}
+.animate-check-pop {
+  animation: check-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.animate-spin-slow {
+  animation: spin-slow 10s linear infinite;
+}
