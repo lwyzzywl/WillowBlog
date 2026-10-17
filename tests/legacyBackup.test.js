@@ -174,20 +174,29 @@ describe('从 localStorage 读取旧数据', () => {
 })
 
 describe('Supabase 配置与错误文案', () => {
-  it('未配置时给出可操作的中文提示', () => {
-    vi.stubEnv('VITE_SUPABASE_URL', '')
-    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '')
-    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '')
-    expect(supabaseConfig.ok).toBe(false)
-    expect(supabaseConfig.hasUrl).toBe(false)
-    expect(configProblem()).toContain('.env.local')
+  // 注意：configProblem 依赖模块导入时的环境变量，所以这里显式传入配置对象来测，
+  // 避免测试结果被本机 .env.local 干扰。
+  const none = { hasUrl: false, hasKey: false, keyLooksSecret: false }
+
+  it('完全没配置时给出可操作的中文提示', () => {
+    expect(configProblem(none)).toContain('.env.local')
   })
 
   it('只填了 URL 时提示缺少密钥', () => {
-    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
-    vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '')
-    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '')
-    expect(configProblem()).toContain('VITE_SUPABASE_PUBLISHABLE_KEY')
+    expect(configProblem({ hasUrl: true, hasKey: false, keyLooksSecret: false })).toContain('VITE_SUPABASE_PUBLISHABLE_KEY')
+  })
+
+  it('只填了密钥时提示缺少 URL', () => {
+    expect(configProblem({ hasUrl: false, hasKey: true, keyLooksSecret: false })).toContain('VITE_SUPABASE_URL')
+  })
+
+  it('误填 service_role 时优先警告密钥类型错误', () => {
+    const message = configProblem({ hasUrl: true, hasKey: true, keyLooksSecret: true })
+    expect(message).toContain('service_role')
+  })
+
+  it('配置齐全时没有问题', () => {
+    expect(configProblem({ hasUrl: true, hasKey: true, keyLooksSecret: false })).toBeNull()
   })
 
   it('把 PostgREST/Postgres 错误码翻译成中文', () => {

@@ -144,11 +144,7 @@ async function verifyVisitor(chrome) {
   )
   record('保留管理员登录入口', loginEntry)
 
-  // 7. 未配置 Supabase 时给出明确提示而不是白屏
-  const bodyText = await page.evaluate(() => document.body.innerText)
-  record('未配置 Supabase 时有明确中文提示', bodyText.includes('Supabase') || bodyText.includes('未配置'), '')
-
-  // 8. 直接访问私人锚点也看不到内容
+  // 7. 直接访问私人锚点也看不到内容
   await page.evaluate(() => {
     window.location.hash = '#projects'
   })
@@ -159,7 +155,7 @@ async function verifyVisitor(chrome) {
   }))
   record('手动访问 #projects 也不存在该模块 DOM', !afterHash.hasProjects, afterHash.sections.join(','))
 
-  // 9. 打开登录弹窗：不能登录（未配置），也不能出现任何私人内容
+  // 8. 打开登录弹窗：检查配置状态提示是否与实际配置一致
   await page.evaluate(() => {
     const button = Array.from(document.querySelectorAll('header button')).find((node) => node.textContent.includes('管理员登录'))
     button?.click()
@@ -174,7 +170,14 @@ async function verifyVisitor(chrome) {
     }
   })
   record('登录弹窗可打开', dialog.open)
-  record('未配置时登录按钮禁用并说明原因', dialog.submitDisabled === true, dialog.text.slice(0, 60))
+
+  // 未配置 → 提交被禁用 + 明确说明原因；已配置 → 可以登录 + 不出现配置警告
+  if (dialog.submitDisabled) {
+    record('未配置 Supabase 时禁用登录并说明原因', /Supabase|\.env/.test(dialog.text), dialog.text.slice(0, 60))
+  } else {
+    record('已配置 Supabase 时登录按钮可用', true, '可以输入账号密码')
+    record('已配置时不再提示「尚未配置」', !/尚未配置/.test(dialog.text), '无配置警告')
+  }
   record('登录弹窗不泄露任何私人数据', !dialog.text.includes('进行中项目') && !dialog.text.includes('闪光点'))
 
   await page.screenshot({ path: 'shots/visitor-home.png', fullPage: false })

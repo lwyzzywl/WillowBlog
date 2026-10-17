@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
+import { normalizeSupabaseUrl, urlHasServicePath } from './supabaseUrl'
+
+export { normalizeSupabaseUrl } from './supabaseUrl'
 
 /**
  * Supabase 客户端。
@@ -10,13 +13,24 @@ import { createClient } from '@supabase/supabase-js'
  * 严禁在前端出现 service_role / secret key：那会直接绕过 RLS。
  */
 
-const url = (import.meta.env.VITE_SUPABASE_URL || '').trim()
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim()
+const url = normalizeSupabaseUrl(rawUrl)
 // 新项目叫 publishable key，老项目叫 anon key；两个变量都支持，避免用户配错就白屏
 const publicKey = (
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   ''
 ).trim()
+
+/** 用户填的 URL 里是否带了不应有的服务路径（用于给出提示） */
+const urlHadServicePath = urlHasServicePath(rawUrl)
+
+if (import.meta.env.DEV && urlHadServicePath) {
+  console.warn(
+    `[WillowBlog] VITE_SUPABASE_URL 里带了服务路径，已自动修正为 ${url}。` +
+      '建议直接把 .env.local 里的值改成这个（Project Settings → Data API → Project URL）。',
+  )
+}
 
 /** 密钥是否像 service_role / secret（配错会直接泄露整个数据库，必须拦住） */
 function looksLikeSecretKey(key) {
@@ -38,6 +52,8 @@ export const supabaseConfig = {
   publicKey,
   hasUrl: Boolean(url),
   hasKey: Boolean(publicKey),
+  /** URL 里带了 /rest/v1 之类的服务路径（已被自动修正） */
+  urlHadServicePath,
   /** 误填 service_role / secret key */
   keyLooksSecret: looksLikeSecretKey(publicKey),
   get ok() {
@@ -45,16 +61,16 @@ export const supabaseConfig = {
   },
 }
 
-/** 配置问题的中文说明；已配置好时返回 null */
-export function configProblem() {
-  if (!supabaseConfig.hasUrl && !supabaseConfig.hasKey) {
+/** 配置问题的中文说明；已配置好时返回 null。可传入配置对象以便单独测试。 */
+export function configProblem(config = supabaseConfig) {
+  if (!config.hasUrl && !config.hasKey) {
     return '尚未配置 Supabase：请复制 .env.example 为 .env.local，填入 VITE_SUPABASE_URL 与 VITE_SUPABASE_PUBLISHABLE_KEY 后重启开发服务器。'
   }
-  if (!supabaseConfig.hasUrl) return '缺少 VITE_SUPABASE_URL，请检查 .env.local 并重启开发服务器。'
-  if (!supabaseConfig.hasKey) {
+  if (!config.hasUrl) return '缺少 VITE_SUPABASE_URL，请检查 .env.local 并重启开发服务器。'
+  if (!config.hasKey) {
     return '缺少 VITE_SUPABASE_PUBLISHABLE_KEY（旧项目可填 VITE_SUPABASE_ANON_KEY），请检查 .env.local 并重启开发服务器。'
   }
-  if (supabaseConfig.keyLooksSecret) {
+  if (config.keyLooksSecret) {
     return '检测到前端配置里填入了 service_role / secret key，这会让数据库失去保护。请改用 publishable key（或旧版 anon public key）。'
   }
   return null

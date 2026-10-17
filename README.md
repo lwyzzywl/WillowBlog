@@ -71,13 +71,14 @@ npm run dev
 | `npm run build` | 生产构建（输出到 `dist/`） |
 | `npm run preview` | 本地预览构建产物 |
 | `npm test` | 运行单元测试（vitest，47 项：Markdown 变换 / 备份校验 / 权限划分 / 错误文案） |
+| `npm run test:sql` | **真实执行两个 migration + `verify_rls.sql`**，并用三种角色压测 RLS 权限（PGlite，无需任何凭据） |
 | `npm run verify:app` | 浏览器端验收：访客权限隔离、静态产物无密钥泄露 |
-| `npm run verify:rls` | 对真实 Supabase 项目验证 RLS（匿名 / 非管理员 / 管理员三种角色） |
+| `npm run verify:rls` | 对真实 Supabase 项目验证 RLS（匿名 / 非管理员 / 管理员三种真实 JWT） |
 
 `verify:app` 需要先 `npm run build`，并另起一个静态服务器指向 `dist/`：
 
 ```bash
-npx serve dist -l 5199
+node scripts/static-server.mjs dist 5199
 npm run verify:app http://127.0.0.1:5199/
 ```
 
@@ -88,7 +89,7 @@ npm run verify:app http://127.0.0.1:5199/
 1. 建 Supabase 项目 → 拿 **Project URL** 与 **publishable key**
 2. SQL Editor 执行两个 migration 文件
 3. Auth 里手动创建唯一管理员账号（关闭公开注册），把 UID 填进 `setup_admin.sql` 执行
-4. 本地写好 `.env.local`，跑 `npm run verify:rls` 确认权限真的生效
+4. 本地写好 `.env.local`，先跑 `npm run test:sql`（本地真实执行 SQL），再跑 `npm run verify:rls` 确认权限在你的项目上真的生效
 5. 旧数据：在原浏览器里导出备份 → 管理员登录新站点 → 顶部「旧数据迁移」导入（见 [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)）
 6. 部署到 GitHub Pages 或 Vercel，并在托管平台配置同样的两个环境变量
 
@@ -120,11 +121,14 @@ supabase/
   migrations/0001_init_willow_tables.sql   建表 + RLS + GRANT + 触发器
   migrations/0002_willow_put_rpc.sql       并发安全的写入函数
   sql/setup_admin.sql                      设置管理员 UID（唯一需要手改的地方）
-  sql/verify_rls.sql                       权限自检查询
+  sql/verify_rls.sql                       权限自检（单条语句出 13 项 PASS/FAIL 报告）
+  sql/verify_rls_details.sql               策略/约束/函数/数据明细（可选）
 scripts/
   build.mjs          构建入口（规避部分 Windows 环境的 TEMP 权限问题）
+  test-sql.mjs       用 PGlite 真实执行 migration + verify_rls.sql 并压测 RLS
   verify-app.mjs     浏览器端验收
-  rls-check.mjs      RLS 真实验证
+  rls-check.mjs      对真实 Supabase 项目做 RLS 行为验证
+  static-server.mjs  验收用静态服务器
 public/backup-legacy.js   可在旧站点控制台直接执行的导出脚本
 tests/                    vitest 单元测试
 ```

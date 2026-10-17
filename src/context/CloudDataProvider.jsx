@@ -134,12 +134,17 @@ export function useSyncSummary() {
     const offline = list.filter(([, collection]) => collection.phase === 'offline')
     const loading = list.filter(([, collection]) => collection.loading)
     const saving = list.filter(([, collection]) => collection.saving)
+    // 「已读到云端数据」的模块数：全为 0 说明云端还是空的（当前展示内置示例）
+    const filled = list.filter(([, collection]) => collection.phase === 'ready' && collection.exists).length
+    const readyCount = list.filter(([, collection]) => collection.phase === 'ready').length
     return {
       erroring: erroring.map(([section, collection]) => ({ section, error: collection.error || collection.saveError })),
       offlineCount: offline.length,
       offline: offline.map(([section]) => section),
       loadingCount: loading.length,
       savingCount: saving.length,
+      filled,
+      readyCount,
       refreshAll,
     }
   }, [collections, refreshAll])

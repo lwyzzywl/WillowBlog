@@ -1,4 +1,4 @@
-import { AlertTriangle, CloudOff, Loader2 } from 'lucide-react'
+import { AlertTriangle, CloudOff, FileText, Loader2 } from 'lucide-react'
 
 /**
  * 模块级的云端状态条：加载中 / 保存中 / 保存成功 / 失败。
@@ -6,7 +6,7 @@ import { AlertTriangle, CloudOff, Loader2 } from 'lucide-react'
  * 访客只会看到只读提示，不会看到任何保存相关的 UI。
  */
 export default function CloudStatusBar({ collection, isAdmin = false, className = '' }) {
-  const { phase, loading, error, saving, saved, saveError, conflict, dirty, reload } = collection
+  const { phase, loading, error, saving, saved, saveError, conflict, dirty, reload, exists } = collection
 
   if (loading || phase === 'idle') {
     return (
@@ -38,6 +38,18 @@ export default function CloudStatusBar({ collection, isAdmin = false, className 
         <button type="button" onClick={() => reload()} className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-600 ring-1 ring-rose-200 transition hover:bg-rose-100">
           重新加载
         </button>
+      </span>
+    )
+  }
+
+  // 云端还没有这个模块的行：当前展示的是内置示例，必须说清楚，
+  // 否则发布出去访客会以为这是站长的真实内容。
+  if (phase === 'ready' && !exists) {
+    return (
+      <span className={`flex flex-wrap items-center gap-1.5 text-xs font-semibold text-ink-400 ${className}`}>
+        <FileText className="h-3.5 w-3.5" />
+        示例内容 · 云端还没有数据
+        {isAdmin && <span className="font-normal text-ink-300">（你编辑一次就会写入云端）</span>}
       </span>
     )
   }

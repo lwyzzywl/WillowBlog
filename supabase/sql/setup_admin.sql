@@ -15,7 +15,7 @@
 -- ============================================================================
 
 insert into public.willow_admins (user_id, note)
-values ('<<<ADMIN_USER_UID>>>', 'WillowBlog 站长')
+values ('fbf1ee00-c37a-4c3e-9c71-c9294330bcd8', 'WillowBlog 站长')
 on conflict (user_id) do update set note = excluded.note;
 
 -- 查看当前管理员名单

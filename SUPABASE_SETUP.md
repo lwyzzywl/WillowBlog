@@ -100,6 +100,43 @@ Dashboard 左侧 → **SQL Editor** → **New query**，然后**按顺序**执�
 > 用 Supabase CLI 的等价做法：`supabase link` 之后 `supabase db push`
 > （`supabase/migrations/` 已是 CLI 标准目录结构）。
 
+### ④ 执行自检报告
+
+在 SQL Editor 里全选 `supabase/sql/verify_rls.sql` 并 **Run**。
+它是**一条**语句，会一次性返回一张 13 行的检查表（SQL Editor 只显示最后一条语句的结果，
+所以这里刻意合并成单条，否则你只能看到最后一栏）：
+
+```
+序号 | 检查项                                    | 结论  | 详情
+ 1   | 三张表均已开启 RLS                        | PASS  | willow_admins=true, ...
+ 2   | 公开表 section 白名单约束存在              | PASS  | willow_public_section_allowed → CHECK (...)
+ 3   | 私人表 section 白名单约束存在              | PASS  | willow_private_section_allowed → CHECK (...)
+ 4   | anon 对 willow_public 只读                 | PASS  | SELECT=true, INSERT=false, UPDATE=false, DELETE=false
+ 5   | anon 对 willow_private 无任何权限          | PASS  | SELECT=false, INSERT=false, UPDATE=false, DELETE=false
+ 6   | anon 对 willow_admins 无任何权限           | PASS  | SELECT=false
+ 7   | authenticated 具备表级读写权限（供 RLS 再筛）| PASS | public: SELECT=true UPDATE=true / ...
+ 8   | 私人表策略仅 authenticated 且校验管理员     | PASS  | willow_private_admin_select(SELECT→authenticated); ...
+ 9   | 公开表策略：访客可读 / 写入仅管理员         | PASS  | willow_public_read_all(SELECT→anon,authenticated); ...
+10   | willow_admins 无写策略（仅 SQL Editor 可改）| PASS  | willow_admins_read_self(SELECT)
+11   | anon 不能执行 willow_put / is_willow_admin / willow_versions | PASS | anon.willow_put=false, ...
+12   | 提权函数已固定 search_path                  | PASS  | is_willow_admin=search_path=""; ...
+13   | 管理员名单已配置                            | PASS  | 共 1 位管理员（你的邮箱）
+```
+
+结论含义：
+
+- **PASS** —— 符合预期
+- **FAIL(…)** —— 有问题，括号里说明原因，常见是 migration 没执行完
+- **WARN(…)** —— 可以继续但要处理，例如第 13 项提示「还没执行 setup_admin.sql 填 UID」
+
+想看策略表达式、数据条数、管理员名单、函数权限明细，再执行
+`supabase/sql/verify_rls_details.sql` 里的各条查询（需一条一条选中执行）。
+
+> **不想手动跑？** 项目已带 `npm run test:sql`：它用 PGlite（PostgreSQL 的 WASM 版）
+> 在本机**真实执行**两个 migration 与 `verify_rls.sql`，并用 `SET ROLE` 模拟
+> anon / 非管理员 / 管理员三种身份逐条压测权限。**不需要任何 Supabase 凭据**。
+> 它能证明 SQL 语法有效、策略行为正确；但不能替代在你的真实项目上跑一次 `npm run verify:rls`。
+
 ---
 
 ## 5. 创建唯一管理员账号
@@ -197,7 +234,40 @@ npm run dev
 
 ## 8. 验证 RLS 已生效
 
-### 方式一：项目自带脚本（推荐）
+分两层验证，**先本地、再真实项目**。
+
+### 第一层：本地真实执行 SQL（不需要任何凭据）
+
+```bash
+npm run test:sql
+```
+
+它会用 PGlite（PostgreSQL 编译成 WASM，跑在你本机）**原样执行**
+`0001`、`0002` 两个 migration 和 `verify_rls.sql`，然后用 `SET ROLE` +
+JWT 声明模拟三种身份，逐条验证：
+
+```
+— 1. 执行 migration（文件原样执行） —
+✅ 0001 执行成功        ✅ 0002 执行成功        ✅ 三张表已创建
+— 2. 执行 verify_rls.sql（原样执行） —
+✅ 返回 13 项检查       ✅ 名单为空时无误报 FAIL  ✅ 第 13 项正确 WARN
+— 4. 匿名访客 anon —
+✅ 可读公开表           ✅ 不可读私人表(42501)   ✅ 不可写公开表(42501)
+✅ 不可调 willow_put    ✅ 不可调 willow_versions
+— 5. 非管理员 authenticated —
+✅ 读私人表 0 行        ✅ 改公开表 0 行         ✅ willow_put 被拒
+— 6. 管理员 —
+✅ 读写成功             ✅ 版本 +1               ✅ 过期版本被拒(P0001)
+— 7. section 约束 —
+✅ 私人模块写不进公开表(23514)  ✅ 公开模块写不进私人表(23514)
+```
+
+预期最后一行：`通过 42/42`。
+
+> 这一层能证明：SQL 语法有效、表/约束/策略/函数确实建对、RLS 行为符合设计。
+> `auth.users` / `auth.uid()` 在这里是脚本写的替身，所以**仍需做第二层**。
+
+### 第二层：在你的真实 Supabase 项目上验证（需要凭据）
 
 脚本会用**三种真实角色**发请求验证：匿名访客、非管理员登录用户、管理员。
 
@@ -221,17 +291,20 @@ npm run verify:rls
 ```
 A. 匿名访客（anon key，无 JWT）
 ✅ 匿名单读公开表成功（访客可见题解/笔记）
-✅ 匿名读私人表得到 0 行
+✅ 匿名读私人表被拒绝（0 行或权限错误）
 ✅ 匿名写入公开表被拒绝
 ✅ 匿名写入私人表被拒绝
 ✅ 匿名调用 willow_put 被拒绝
+✅ 匿名不可调用 willow_versions（管理员功能）
 ✅ 匿名读管理员名单被拒绝或为空
 
 B. 非管理员已登录用户
 ✅ 非管理员账号可以登录（但不应获得权限）
-✅ 非管理员读私人表得到 0 行
+✅ 非管理员读私人表被拒绝（0 行或权限错误）
 ✅ 非管理员改公开表被拒绝（0 行受影响或报错）
 ✅ 非管理员调用 willow_put 被拒绝
+✅ 非管理员读不到别人的管理员行
+✅ 非管理员的版本列表只含公开模块
 
 C. 管理员（真实登录）
 ✅ 管理员登录成功
@@ -246,17 +319,17 @@ C. 管理员（真实登录）
 
 3. 测完可以把 `SUPABASE_SERVICE_ROLE_KEY` 从 `.env.local` 删掉；临时账号脚本会自动删除。
 
-### 方式二：手动验证
+### 第三层：手动验证（可选）
 
 1. 用**无痕窗口**打开线上站点 → 应该只能力扣题解和知识笔记，
    看不到打卡、项目日志、闪光点、专注计时器。
 2. 打开开发者工具 → Console，粘贴下面这段（把两个值换成你的）：
 
 ```js
-// 访客身份尝试读取私人表：应该返回空数组
+// 访客身份尝试读取私人表：应该报 42501（或返回空数组）
 const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2')
-const sb = createClient('你的URL', '你的publishable_key')
-console.log('私人表（应为 []）:', (await sb.from('willow_private').select('section')).data)
+const sb = createClient('https://kmnwkzhqemldfyzarnle.supabase.co/rest/v1/', 'sb_publishable_a6dAFAjkKuIgFzXP5zTxeg_swaT9ydH')
+console.log('私人表（应被拒绝）:', (await sb.from('willow_private').select('section')).error?.code)
 console.log('公开表（应有数据）:', (await sb.from('willow_public').select('section')).data)
 // 访客尝试写入公开表：应该报错 permission denied / RLS
 console.log('写入（应报错）:', (await sb.from('willow_public').update({ payload: [] }).eq('section', 'notes')).error?.code)
@@ -325,7 +398,10 @@ console.log('写入（应报错）:', (await sb.from('willow_public').update({ p
 - **为什么 `is_willow_admin()` 是 `security definer`**：
   策略里需要读 `willow_admins`，而调用者本身没有该表读权限，必须提权。
   函数体不拼接任何动态 SQL，因此把 `search_path` 设为空串（最严格），所有对象写全限定名。
-- **`anon` 能执行 `willow_versions()`**：它只是列出各模块版本号给迁移预检用，
-  而且 `security invoker` —— RLS 依然生效，访客只会看到公开模块的版本。
+- **`willow_versions()` 也是 `security definer`**，但只授予 `authenticated`，
+  并在函数内用 `is_willow_admin()` 过滤私人行：
+  这样非管理员看到的只有公开模块（不会泄露「存在哪些私人模块」），anon 直接无权调用。
+  如果它是 `security invoker`，`union` 里那张私人表会因为 anon 没有表级 SELECT
+  而让整个函数 42501 —— 这个坑是本地真实执行 SQL 时才暴露出来的。
 - **写入统一走 `willow_put()`**：原子地 `version + 1`，避免「读-改-写」竞态；
   并在函数内再校验一次管理员身份（RLS 之外的第二道闸门）。

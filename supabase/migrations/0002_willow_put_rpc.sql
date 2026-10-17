@@ -131,24 +131,35 @@ revoke all on function public.willow_put(text, jsonb, bigint, boolean) from anon
 grant execute on function public.willow_put(text, jsonb, bigint, boolean) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 读取各模块版本号（用于导入前的冲突预检；RLS 依然生效，
--- 访客只能看到 willow_public 的版本）
+-- 读取各模块版本号（用于导入前的冲突预检）
+--
+-- 为什么是 security definer：
+--   函数体要 union 两张表，而 anon 对 willow_private 连表级 SELECT 都没有，
+--   security invoker 会让整个函数直接 42501（连公开模块的版本也拿不到）。
+--   因此提权读取，再用 is_willow_admin() 过滤私人行 —— 非管理员只看得到公开模块，
+--   不会泄露「存在哪些私人模块」这类元数据。
+--   search_path 固定为空，所有对象写全限定名。
+--
+-- 权限：只授予 authenticated（这是导入向导用的管理员功能，anon 没有理由调用）。
 -- ---------------------------------------------------------------------------
 create or replace function public.willow_versions()
 returns table (section text, version bigint, updated_at timestamptz, is_public boolean)
 language sql
 stable
-security invoker
-set search_path = public
+security definer
+set search_path = ''
 as $$
-  select p.section, p.version, p.updated_at, true  from public.willow_public  p
+  select p.section, p.version, p.updated_at, true
+    from public.willow_public p
   union all
-  select r.section, r.version, r.updated_at, false from public.willow_private r
-  order by 4 desc, 1;
+  select r.section, r.version, r.updated_at, false
+    from public.willow_private r
+   where public.is_willow_admin()
+   order by 4 desc, 1;
 $$;
 
-comment on function public.willow_versions() is '列出各模块当前版本（受 RLS 限制）';
+comment on function public.willow_versions() is '列出各模块当前版本（非管理员只能看到公开模块）';
 
 revoke all on function public.willow_versions() from public;
-grant execute on function public.willow_versions() to anon;
+revoke all on function public.willow_versions() from anon;
 grant execute on function public.willow_versions() to authenticated;

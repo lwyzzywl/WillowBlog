@@ -113,7 +113,14 @@ async function main() {
 
   const privateRead = await anon.from(PRIVATE_TABLE).select('section')
   const privateRows = privateRead.data?.length ?? 0
-  record('匿名读私人表得到 0 行', !privateRead.error && privateRows === 0, privateRead.error ? shortError(privateRead.error) : `${privateRows} 行`)
+  // 两种「拒绝」都算通过：
+  //   · 没有表级 GRANT → 报 42501（本项目的设计）
+  //   · 有 GRANT 但没有 RLS 策略 → 返回 0 行
+  const privateDenied = (privateRead.error && isDenied(privateRead.error)) || (!privateRead.error && privateRows === 0)
+  record('匿名读私人表被拒绝（0 行或权限错误）', privateDenied, privateRead.error ? shortError(privateRead.error) : `${privateRows} 行`)
+
+  const anonVersions = await anon.rpc('willow_versions')
+  record('匿名不可调用 willow_versions（管理员功能）', Boolean(anonVersions.error), shortError(anonVersions.error))
 
   const anonInsert = await anon.from(PUBLIC_TABLE).insert({ section: 'leetcode', payload: [], version: 1 })
   record('匿名写入公开表被拒绝', Boolean(anonInsert.error) && isDenied(anonInsert.error), shortError(anonInsert.error))
@@ -154,7 +161,9 @@ async function main() {
 
       if (!signedIn.error) {
         const memberPrivate = await member.from(PRIVATE_TABLE).select('section')
-        record('非管理员读私人表得到 0 行', !memberPrivate.error && (memberPrivate.data?.length ?? 0) === 0, memberPrivate.error ? shortError(memberPrivate.error) : `${memberPrivate.data?.length ?? 0} 行`)
+        const memberRows = memberPrivate.data?.length ?? 0
+        const memberDenied = (memberPrivate.error && isDenied(memberPrivate.error)) || (!memberPrivate.error && memberRows === 0)
+        record('非管理员读私人表被拒绝（0 行或权限错误）', memberDenied, memberPrivate.error ? shortError(memberPrivate.error) : `${memberRows} 行`)
 
         const memberPublicWrite = await member.from(PUBLIC_TABLE).update({ payload: [] }).eq('section', 'notes')
         record('非管理员改公开表被拒绝（0 行受影响或报错）', Boolean(memberPublicWrite.error) || (memberPublicWrite.data?.length ?? 0) === 0, shortError(memberPublicWrite.error) || '0 行受影响')
@@ -164,6 +173,14 @@ async function main() {
 
         const memberAdmins = await member.from('willow_admins').select('user_id')
         record('非管理员读不到别人的管理员行', (memberAdmins.data?.length ?? 0) === 0, shortError(memberAdmins.error) || '0 行')
+
+        const memberVersions = await member.rpc('willow_versions')
+        const visibleSections = (memberVersions.data || []).map((row) => row.is_public)
+        record(
+          '非管理员的版本列表只含公开模块',
+          !memberVersions.error && visibleSections.length > 0 && visibleSections.every((isPublic) => isPublic === true),
+          memberVersions.error ? shortError(memberVersions.error) : `${memberVersions.data?.length ?? 0} 个模块`,
+        )
 
         await member.auth.signOut()
       }

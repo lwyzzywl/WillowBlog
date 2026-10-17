@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:sql": "node scripts/test-sql.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "verify:app": "node scripts/verify-app.mjs",
     "verify:rls": "node scripts/rls-check.mjs"
   },
@@ -21,6 +23,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
     "@tailwindcss/vite": "^4.1.11",
     "@vitejs/plugin-react": "^4.6.0",
     "puppeteer-core": "^25.9.0",

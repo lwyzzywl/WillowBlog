@@ -1,0 +1,79 @@
+# ============================================================================
+# WillowBlog · 自动部署到 GitHub Pages
+# ----------------------------------------------------------------------------
+# 触发：推送到 main，或在 Actions 页面手动 Run workflow
+#
+# 用之前需要在仓库里做两件事（见 DEPLOY.md 第 2 节）：
+#   1. Settings → Pages → Source 选 “GitHub Actions”
+#   2. Settings → Secrets and variables → Actions 里加两个 secret：
+#        VITE_SUPABASE_URL
+#        VITE_SUPABASE_PUBLISHABLE_KEY
+#
+# 注意：
+#   · 这里只注入公开密钥（会被打包进前端，本来就是公开的）
+#   · 绝对不要在这里加 service_role / secret key
+#   · 没有配置 secret 也能构建成功，但页面会显示「Supabase 尚未配置」
+# ============================================================================
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署；新提交会取消排队中的旧部署
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 构建
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 构建
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: 部署
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署到 Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

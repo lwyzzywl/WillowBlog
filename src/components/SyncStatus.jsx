@@ -7,7 +7,7 @@ import { useSyncSummary } from '../context/CloudDataProvider'
  * 「显示内置内容」表示云端不可用时的只读回退，不是错误。
  */
 export default function SyncStatus() {
-  const { erroring, offlineCount, loadingCount, savingCount, refreshAll } = useSyncSummary()
+  const { erroring, offlineCount, loadingCount, savingCount, refreshAll, filled, readyCount } = useSyncSummary()
 
   if (loadingCount > 0) {
     return (
@@ -49,6 +49,20 @@ export default function SyncStatus() {
       >
         <CloudOff className="h-3.5 w-3.5" />
         显示内置内容
+      </span>
+    )
+  }
+
+  // 连上了云端但一个模块都还没有数据：这时界面展示的是内置示例，
+  // 不能显示「已同步」让人误以为是真实内容
+  if (readyCount > 0 && filled === 0) {
+    return (
+      <span
+        className="hidden items-center gap-1.5 rounded-full bg-cream-100 px-3 py-1.5 text-xs font-semibold text-ink-400 ring-1 ring-cream-200 sm:flex"
+        title="已连上 Supabase，但云端表里还没有数据；当前展示的是内置示例内容"
+      >
+        <CloudOff className="h-3.5 w-3.5" />
+        已连接 · 云端暂无内容
       </span>
     )
   }

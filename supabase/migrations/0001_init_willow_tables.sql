@@ -103,6 +103,10 @@ grant execute on function public.is_willow_admin() to authenticated;
 -- ---------------------------------------------------------------------------
 -- 4. 撤销默认权限，再显式 GRANT（表级权限是 RLS 的前提）
 -- ---------------------------------------------------------------------------
+-- schema 层的 USAGE 也显式声明，不依赖 Dashboard 的默认配置
+grant usage on schema public to anon;
+grant usage on schema public to authenticated;
+
 revoke all on table public.willow_public  from anon;
 revoke all on table public.willow_private from anon;
 revoke all on table public.willow_public  from public;
