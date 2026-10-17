@@ -1,35 +1,34 @@
-import { useEffect, useMemo, useState } from 'react'
-import { BadgeCheck, BookOpen, Clock, Flame, Hourglass, Medal, PartyPopper, Quote, Rocket, RotateCw, Star, Timer } from 'lucide-react'
-import { formatDateCN, getGreeting, getQuoteIndex, INITIAL_SPARKLES, PROJECTS, QUOTES, SUBJECTS } from '../data'
-import { readStorage, toast, todayKey, useNow, writeStorage } from '../hooks'
-import { formatMinutes, getStudyLog, lastNDaysStudy, todayStudyMinutes, totalStudyMinutes } from '../studyTime'
+import { useMemo, useState } from 'react'
+import { BadgeCheck, Clock, Code2, Flame, Hourglass, Medal, PartyPopper, Quote, Rocket, RotateCw, Star, Timer } from 'lucide-react'
+import { formatDateCN, getGreeting, getQuoteIndex, QUOTES } from '../data'
+import { toast, todayKey, useNow } from '../hooks'
+import { useCollection } from '../context/CloudDataProvider'
+import { formatMinutes, lastNDaysStudy, todayStudyMinutes, totalStudyMinutes } from '../studyTime'
+import CloudStatusBar from './CloudStatusBar'
 import Reveal from './Reveal'
 import Heatmap from './Heatmap'
 
 const BADGE_GOALS = [7, 14, 30, 100]
 
+/** 这个组件只在管理员登录后渲染（App.jsx 里有权限判断），所以可以放心展示私人统计 */
 export default function Dashboard({ checkedIn, onCheckIn, streak, checkins, onResetCheckins }) {
   const now = useNow(60000)
   const greeting = getGreeting(now)
-  
-  const streakPct = Math.min(100, (streak / 30) * 100)
+
+  const leetcode = useCollection('leetcode')
+  const projects = useCollection('projects')
+  const sparkles = useCollection('sparkles')
+  const weekHours = useCollection('weekHours')
+  const studyLog = useCollection('studyLog')
+
   const [quoteIndex, setQuoteIndex] = useState(() => getQuoteIndex(new Date()))
-  const [statsVersion, setStatsVersion] = useState(0)
   const [editingHours, setEditingHours] = useState(false)
   const [hoursDraft, setHoursDraft] = useState('')
 
-  useEffect(() => {
-    const refresh = () => setStatsVersion((version) => version + 1)
-    window.addEventListener('willow:data', refresh)
-    window.addEventListener('storage', refresh)
-    return () => {
-      window.removeEventListener('willow:data', refresh)
-      window.removeEventListener('storage', refresh)
-    }
-  }, [])
+  const streakPct = Math.min(100, (streak / 30) * 100)
 
   const weekDays = useMemo(() => {
-    const set = new Set(checkins)
+    const set = new Set(Array.isArray(checkins) ? checkins : [])
     const cursor = new Date()
     let count = 0
     for (let i = 0; i < 7; i++) {
@@ -39,18 +38,22 @@ export default function Dashboard({ checkedIn, onCheckIn, streak, checkins, onRe
     return count
   }, [checkins])
 
-  const studyToday = useMemo(() => todayStudyMinutes(getStudyLog()), [statsVersion])
-  const studyTotal = useMemo(() => totalStudyMinutes(getStudyLog()), [statsVersion])
-  const studySeries = useMemo(() => lastNDaysStudy(getStudyLog(), 7), [statsVersion])
+  const log = useMemo(() => (Array.isArray(studyLog.data) ? studyLog.data : []), [studyLog.data])
+  const studyToday = useMemo(() => todayStudyMinutes(log), [log])
+  const studyTotal = useMemo(() => totalStudyMinutes(log), [log])
+  const studySeries = useMemo(() => lastNDaysStudy(log, 7), [log])
+
+  const hours = useMemo(() => {
+    const value = Number(weekHours.data)
+    return Math.min(168, Math.max(0, Number.isFinite(value) ? value : 0))
+  }, [weekHours.data])
 
   const quickStats = useMemo(() => {
-    const subjects = readStorage('willow:subjects', SUBJECTS) || []
-    const chapters = subjects.flatMap((subject) => subject.chapters || [])
-    const mastered = chapters.filter((chapter) => chapter.status === 'done').length
-    const projects = readStorage('willow:projects', PROJECTS) || []
-    const ongoing = projects.filter((project) => project.status === '进行中').length
-    const sparkles = readStorage('willow:sparkles', INITIAL_SPARKLES) || []
-    const hours = Math.min(168, Math.max(0, Number(readStorage('willow:weekHours', 0)) || 0))
+    const problems = Array.isArray(leetcode.data) ? leetcode.data : []
+    const solutionCount = problems.reduce((acc, problem) => acc + (problem.solutions?.length || 0), 0)
+    const projectList = Array.isArray(projects.data) ? projects.data : []
+    const ongoing = projectList.filter((project) => project.status === '进行中').length
+    const sparkleList = Array.isArray(sparkles.data) ? sparkles.data : []
     return [
       {
         id: 'time',
@@ -80,16 +83,16 @@ export default function Dashboard({ checkedIn, onCheckIn, streak, checkins, onRe
         tint: 'bg-emerald-100',
         color: 'text-emerald-500',
       },
-      { id: 'chapter', label: '已掌握章节', value: `${mastered} 个`, sub: `共 ${chapters.length} 个章节`, icon: BookOpen, tint: 'bg-emerald-100', color: 'text-emerald-500' },
-      { id: 'project', label: '进行中项目', value: `${ongoing} 个`, sub: `共 ${projects.length} 个项目`, icon: Rocket, tint: 'bg-amber-100', color: 'text-amber-500' },
-      { id: 'star', label: '收集闪光点', value: `${sparkles.length} 颗`, sub: '每一颗都算数 ✨', icon: Star, tint: 'bg-rose-100', color: 'text-rose-400' },
+      { id: 'leetcode', label: '力扣题解', value: `${problems.length} 题`, sub: `${solutionCount} 个解法`, icon: Code2, tint: 'bg-violet-100', color: 'text-violet-500' },
+      { id: 'project', label: '进行中项目', value: `${ongoing} 个`, sub: `共 ${projectList.length} 个项目`, icon: Rocket, tint: 'bg-amber-100', color: 'text-amber-500' },
+      { id: 'star', label: '收集闪光点', value: `${sparkleList.length} 颗`, sub: '每一颗都算数 ✨', icon: Star, tint: 'bg-rose-100', color: 'text-rose-400' },
     ]
-  }, [statsVersion, weekDays, studyToday, studyTotal])
+  }, [leetcode.data, projects.data, sparkles.data, hours, weekDays, studyToday, studyTotal])
 
   const commitHours = () => {
     const value = Math.min(168, Math.max(0, Number(hoursDraft) || 0))
-    writeStorage('willow:weekHours', value)
     setEditingHours(false)
+    weekHours.commit(value)
     toast('本周学习时长已更新 ⏱️')
   }
 
@@ -227,7 +230,7 @@ export default function Dashboard({ checkedIn, onCheckIn, streak, checkins, onRe
                 onClick={
                   stat.editable
                     ? () => {
-                        setHoursDraft(String(Number(readStorage('willow:weekHours', 0)) || 0))
+                        setHoursDraft(String(hours))
                         setEditingHours(true)
                       }
                     : undefined
@@ -268,6 +271,10 @@ export default function Dashboard({ checkedIn, onCheckIn, streak, checkins, onRe
               </div>
             ))}
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <CloudStatusBar collection={weekHours} isAdmin className="text-[11px]" />
+            <CloudStatusBar collection={studyLog} isAdmin className="text-[11px]" />
+          </div>
         </Reveal>
 
         <Reveal delay={120}>
@@ -280,8 +287,7 @@ export default function Dashboard({ checkedIn, onCheckIn, streak, checkins, onRe
               <span className="shrink-0 rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-500 ring-1 ring-sky-100">
                 今日 {formatMinutes(studyToday)}
               </span>
-            </div>
-            <div className="mt-5 flex h-36 items-end gap-2 sm:gap-3">
+            </div>            <div className="mt-5 flex h-36 items-end gap-2 sm:gap-3">
               {studySeries.map((day) => {
                 const max = Math.max(1, ...studySeries.map((item) => item.minutes))
                 const height = day.minutes === 0 ? '5%' : `${Math.max(8, Math.round((day.minutes / max) * 100))}%`

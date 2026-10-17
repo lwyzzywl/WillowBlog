@@ -90,6 +90,40 @@ body {
   color: var(--color-ink-400);
 }
 
+/* 阅读视图里的 Markdown 正文 */
+.md-body > *:first-child {
+  margin-top: 0;
+}
+.md-body > *:last-child {
+  margin-bottom: 0;
+}
+.md-body img {
+  display: block;
+}
+.md-body :where(p, li, blockquote, td, th) :where(code) {
+  word-break: break-word;
+}
+
+/* 知识笔记本：光标定位用的镜像层，仅用于测量，不参与视觉与交互 */
+.note-caret-mirror {
+  pointer-events: none;
+  visibility: hidden;
+}
+
+@keyframes note-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.note-bubble {
+  animation: note-bubble-in 0.16s ease-out both;
+}
+
 @keyframes floaty {
   0%,
   100% {

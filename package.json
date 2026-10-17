@@ -5,10 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "node scripts/build.mjs",
+    "build:vite": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:app": "node scripts/verify-app.mjs",
+    "verify:rls": "node scripts/rls-check.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "canvas-confetti": "^1.9.3",
     "lucide-react": "^0.469.0",
     "react": "^19.1.0",
@@ -19,6 +25,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "puppeteer-core": "^25.9.0",
     "tailwindcss": "^4.1.11",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^5.0.5"
   }
 }

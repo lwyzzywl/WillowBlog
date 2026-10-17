@@ -412,3 +412,167 @@ def fib(n):
 `,
   },
 ]
+
+/* ---------------- 力扣题解 ---------------- */
+export const DIFFICULTIES = [
+  { id: 'easy', label: '简单', badge: 'bg-emerald-50 text-emerald-600 ring-emerald-200' },
+  { id: 'medium', label: '中等', badge: 'bg-amber-50 text-amber-600 ring-amber-200' },
+  { id: 'hard', label: '困难', badge: 'bg-rose-50 text-rose-600 ring-rose-200' },
+]
+
+export const CODE_LANGS = ['C++', 'Java', 'Python', 'JavaScript', 'Go', 'Rust', 'SQL', '其他']
+
+/** 大 O 记号的括号内容，界面显示为 O(1)、O(log n)、O(n²)… */
+export const COMPLEXITY_OPTIONS = [
+  { value: '1', label: 'O(1)' },
+  { value: 'log n', label: 'O(log n)' },
+  { value: 'n', label: 'O(n)' },
+  { value: 'n log n', label: 'O(n log n)' },
+  { value: 'n²', label: 'O(n²)' },
+  { value: 'n³', label: 'O(n³)' },
+  { value: '2ⁿ', label: 'O(2ⁿ)' },
+  { value: 'n!', label: 'O(n!)' },
+  { value: 'm + n', label: 'O(m + n)' },
+  { value: 'm × n', label: 'O(m × n)' },
+]
+
+export const INITIAL_LEETCODE = [
+  {
+    id: 'lc-two-sum',
+    title: '两数之和',
+    link: 'https://leetcode.cn/problems/two-sum/',
+    difficulty: 'easy',
+    tags: ['数组', '哈希表'],
+    solutions: [
+      {
+        id: 'sol-ts-1',
+        title: '解法一：暴力枚举',
+        lang: 'C++',
+        approach: '双重循环枚举所有下标组合 (i, j)，找到两个数之和等于 target 就直接返回。',
+        process: '外层循环固定第一个数，内层从 i + 1 开始找第二个数；题目保证恰好一组答案，所以找到即可提前返回。',
+        timeComplexity: 'n²',
+        spaceComplexity: '1',
+        code: `class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        for (int i = 0; i < nums.size(); i++) {
+            for (int j = i + 1; j < nums.size(); j++) {
+                if (nums[i] + nums[j] == target) {
+                    return {i, j};
+                }
+            }
+        }
+        return {};
+    }
+};`,
+      },
+      {
+        id: 'sol-ts-2',
+        title: '解法二：哈希表一遍遍历',
+        lang: 'Python',
+        approach: '用哈希表存「值 → 下标」，遍历时查 target - x 是否出现过，把查找从 O(n) 降到 O(1)。',
+        process: '一边遍历一边登记；先查后存，避免当前元素和自己配对的问题。',
+        timeComplexity: 'n',
+        spaceComplexity: 'n',
+        code: `class Solution:
+    def twoSum(self, nums: List[int], target: int) -> List[int]:
+        seen = {}
+        for i, x in enumerate(nums):
+            if target - x in seen:
+                return [seen[target - x], i]
+            seen[x] = i
+        return []`,
+      },
+    ],
+  },
+  {
+    id: 'lc-reverse-list',
+    title: '反转链表',
+    link: 'https://leetcode.cn/problems/reverse-linked-list/',
+    difficulty: 'easy',
+    tags: ['链表', '递归'],
+    solutions: [
+      {
+        id: 'sol-rl-1',
+        title: '解法一：迭代（三指针）',
+        lang: 'C++',
+        approach: '用 prev / head / next 三个指针，把当前节点的 next 指向前一个节点，逐节翻转。',
+        process: '保存 next 防止断链，然后 head->next = prev，再整体前移一步，循环到链表末尾。',
+        timeComplexity: 'n',
+        spaceComplexity: '1',
+        code: `class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        ListNode* prev = nullptr;
+        while (head) {
+            ListNode* next = head->next;
+            head->next = prev;
+            prev = head;
+            head = next;
+        }
+        return prev;
+    }
+};`,
+      },
+      {
+        id: 'sol-rl-2',
+        title: '解法二：递归',
+        lang: 'Python',
+        approach: '先递归翻转后面的部分，再把当前节点的 next 接回来，思路更「声明式」。',
+        process: '递归到底返回新头节点；回溯时让 head.next.next = head，并断开 head.next 防止成环。',
+        timeComplexity: 'n',
+        spaceComplexity: 'n',
+        code: `class Solution:
+    def reverseList(self, head: Optional[ListNode]) -> Optional[ListNode]:
+        if not head or not head.next:
+            return head
+        new_head = self.reverseList(head.next)
+        head.next.next = head
+        head.next = None
+        return new_head`,
+      },
+    ],
+  },
+  {
+    id: 'lc-three-sum',
+    title: '三数之和',
+    link: 'https://leetcode.cn/problems/3sum/',
+    difficulty: 'medium',
+    tags: ['数组', '双指针', '排序'],
+    solutions: [
+      {
+        id: 'sol-3s-1',
+        title: '解法一：排序 + 双指针',
+        lang: 'C++',
+        approach: '先排序，固定第一个数，再用左右双指针在剩余区间里夹逼找另外两个数。',
+        process: '排序后 O(n²) 枚举；跳过重复元素去重，双指针根据三数之和与 0 的大小关系左右移动。',
+        timeComplexity: 'n²',
+        spaceComplexity: '1',
+        code: `class Solution {
+public:
+    vector<vector<int>> threeSum(vector<int>& nums) {
+        sort(nums.begin(), nums.end());
+        vector<vector<int>> res;
+        for (int i = 0; i < nums.size(); i++) {
+            if (i > 0 && nums[i] == nums[i - 1]) continue;
+            int left = i + 1, right = nums.size() - 1;
+            while (left < right) {
+                int sum = nums[i] + nums[left] + nums[right];
+                if (sum < 0) left++;
+                else if (sum > 0) right--;
+                else {
+                    res.push_back({nums[i], nums[left], nums[right]});
+                    while (left < right && nums[left] == nums[left + 1]) left++;
+                    while (left < right && nums[right] == nums[right - 1]) right--;
+                    left++;
+                    right--;
+                }
+            }
+        }
+        return res;
+    }
+};`,
+      },
+    ],
+  },
+]

@@ -1,22 +1,24 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Sparkles, Star, Trash2, X } from 'lucide-react'
-import { INITIAL_SPARKLES, SPARKLE_COLORS, SPARKLE_EMOJIS } from '../data'
-import { readStorage, toast, writeStorage } from '../hooks'
+import { SPARKLE_COLORS, SPARKLE_EMOJIS } from '../data'
+import { toast } from '../hooks'
+import { useCollection } from '../context/CloudDataProvider'
+import { useAuth } from '../hooks/useAuth'
+import CloudStatusBar from './CloudStatusBar'
 import Section from './Section'
 import Reveal from './Reveal'
 
 const TILTS = ['-rotate-2', 'rotate-1', 'rotate-2', '-rotate-1']
 
 export default function SparklesBoard() {
-  const [notes, setNotes] = useState(() => readStorage('willow:sparkles', INITIAL_SPARKLES))
+  const { isAdmin } = useAuth()
+  const collection = useCollection('sparkles')
+  const notes = Array.isArray(collection.data) ? collection.data : []
+  const setNotes = collection.commit
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [color, setColor] = useState(SPARKLE_COLORS[0].name)
   const [emoji, setEmoji] = useState(SPARKLE_EMOJIS[0])
-
-  useEffect(() => {
-    writeStorage('willow:sparkles', notes)
-  }, [notes])
 
   useEffect(() => {
     if (!open) return
@@ -28,6 +30,7 @@ export default function SparklesBoard() {
   }, [open])
 
   const openModal = () => {
+    if (!isAdmin) return
     setDraft('')
     setEmoji(SPARKLE_EMOJIS[0])
     setColor(SPARKLE_COLORS[0].name)
@@ -35,6 +38,7 @@ export default function SparklesBoard() {
   }
 
   const addNote = () => {
+    if (!isAdmin) return
     const text = draft.trim()
     if (!text) return
     const now = new Date()
@@ -54,6 +58,7 @@ export default function SparklesBoard() {
   }
 
   const removeNote = (id) => {
+    if (!isAdmin) return
     setNotes((prev) => prev.filter((note) => note.id !== id))
   }
 
@@ -66,11 +71,14 @@ export default function SparklesBoard() {
     >
       <Reveal>
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm ring-1 ring-amber-100">
-            <Star className="h-4 w-4 fill-amber-300 text-amber-400" />
-            <span className="text-sm text-ink-700">
-              已收集 <b className="font-display text-base text-orange-500">{notes.length}</b> 颗闪光
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm ring-1 ring-amber-100">
+              <Star className="h-4 w-4 fill-amber-300 text-amber-400" />
+              <span className="text-sm text-ink-700">
+                已收集 <b className="font-display text-base text-orange-500">{notes.length}</b> 颗闪光
+              </span>
+            </div>
+            <CloudStatusBar collection={collection} isAdmin={isAdmin} />
           </div>
           <button
             type="button"

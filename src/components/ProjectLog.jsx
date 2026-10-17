@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { BookMarked, Check, Github, Hammer, Lightbulb, Plus, Rocket, Trash2, X } from 'lucide-react'
-import { PROJECTS, PROJECT_EMOJIS } from '../data'
-import { readStorage, toast, writeStorage } from '../hooks'
+import { BookMarked, Check, Github, Hammer, Lightbulb, Pencil, Plus, Rocket, Trash2, X } from 'lucide-react'
+import { PROJECT_EMOJIS } from '../data'
+import { toast } from '../hooks'
+import { useCollection } from '../context/CloudDataProvider'
+import { useAuth } from '../hooks/useAuth'
+import CloudStatusBar from './CloudStatusBar'
 import Section from './Section'
 import Reveal from './Reveal'
 
@@ -29,8 +32,12 @@ function StatusBadge({ status }) {
 }
 
 export default function ProjectLog() {
-  const [projects, setProjects] = useState(() => readStorage('willow:projects', PROJECTS))
+  const { isAdmin } = useAuth()
+  const collection = useCollection('projects')
+  const projects = Array.isArray(collection.data) ? collection.data : []
+  const setProjects = collection.commit
   const [open, setOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [name, setName] = useState('')
   const [emoji, setEmoji] = useState(PROJECT_EMOJIS[0])
   const [status, setStatus] = useState('进行中')
@@ -39,10 +46,6 @@ export default function ProjectLog() {
   const [pitfall, setPitfall] = useState('')
   const [review, setReview] = useState('')
   const [github, setGithub] = useState('')
-
-  useEffect(() => {
-    writeStorage('willow:projects', projects)
-  }, [projects])
 
   useEffect(() => {
     if (!open) return
@@ -54,6 +57,8 @@ export default function ProjectLog() {
   }, [open])
 
   const openModal = () => {
+    if (!isAdmin) return
+    setEditingId(null)
     setName('')
     setEmoji(PROJECT_EMOJIS[0])
     setStatus('进行中')
@@ -65,7 +70,21 @@ export default function ProjectLog() {
     setOpen(true)
   }
 
-  const addProject = (event) => {
+  const openEdit = (project) => {
+    if (!isAdmin) return
+    setEditingId(project.id)
+    setName(project.name)
+    setEmoji(project.emoji || PROJECT_EMOJIS[0])
+    setStatus(project.status === '已完成' ? '已完成' : '进行中')
+    setPeriod(project.period && project.period !== '——' ? project.period : '')
+    setStackText((project.stack || []).join(' '))
+    setPitfall(project.pitfall || '')
+    setReview(project.review || '')
+    setGithub(project.github || '')
+    setOpen(true)
+  }
+
+  const saveProject = (event) => {
     event.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return
@@ -74,25 +93,29 @@ export default function ProjectLog() {
       .map((item) => item.trim())
       .filter(Boolean)
       .slice(0, 8)
-    setProjects((prev) => [
-      {
-        id: `project-${Date.now()}`,
-        emoji: emoji.trim() || '💻',
-        name: trimmed,
-        status,
-        period: period.trim() || '——',
-        stack: stack.length ? stack : ['未标注'],
-        pitfall: pitfall.trim() || '灵感还在路上，遇到坑记得回来记一笔 ✍️',
-        review: review.trim(),
-        github: normalizeGithub(github),
-      },
-      ...prev,
-    ])
+    const payload = {
+      emoji: emoji.trim() || '💻',
+      name: trimmed,
+      status,
+      period: period.trim() || '——',
+      stack: stack.length ? stack : ['未标注'],
+      pitfall: pitfall.trim() || (editingId ? '' : '灵感还在路上，遇到坑记得回来记一笔 ✍️'),
+      review: review.trim(),
+      github: normalizeGithub(github),
+    }
+    if (editingId) {
+      setProjects((prev) => prev.map((project) => (project.id === editingId ? { ...project, ...payload } : project)))
+      toast('项目方案已更新 ✏️')
+    } else {
+      setProjects((prev) => [{ id: `project-${Date.now()}`, ...payload }, ...prev])
+      toast('新项目已挂上时间轴 🚀 祝开工顺利')
+    }
     setOpen(false)
-    toast('新项目已挂上时间轴 🚀 祝开工顺利')
+    setEditingId(null)
   }
 
   const removeProject = (id) => {
+    if (!isAdmin) return
     setProjects((prev) => prev.filter((project) => project.id !== id))
   }
 
@@ -104,7 +127,8 @@ export default function ProjectLog() {
       subtitle="每一次踩坑，都是经验的伏笔；每一次复盘，都是成长的存款 💡"
     >
       <Reveal>
-        <div className="mb-8 flex justify-end">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+          <CloudStatusBar collection={collection} isAdmin={isAdmin} />
           <button
             type="button"
             onClick={openModal}
@@ -155,10 +179,19 @@ export default function ProjectLog() {
                     <StatusBadge status={project.status} />
                     <button
                       type="button"
+                      onClick={() => openEdit(project)}
+                      aria-label="编辑这个项目"
+                      title="编辑这个项目"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-300 opacity-100 transition hover:bg-amber-50 hover:text-wood-600 md:opacity-0 md:group-hover:opacity-100"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => removeProject(project.id)}
                       aria-label="删除这个项目"
                       title="删除这个项目"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-300 opacity-0 transition hover:bg-rose-50 hover:text-rose-500 group-hover:opacity-100"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-300 opacity-100 transition hover:bg-rose-50 hover:text-rose-500 md:opacity-0 md:group-hover:opacity-100"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -180,7 +213,11 @@ export default function ProjectLog() {
                       <Lightbulb className="h-3.5 w-3.5" />
                       踩坑与灵感
                     </p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-ink-700">{project.pitfall}</p>
+                    {project.pitfall ? (
+                      <p className="mt-1.5 text-sm leading-relaxed text-ink-700">{project.pitfall}</p>
+                    ) : (
+                      <p className="mt-1.5 text-sm italic text-ink-400">灵感还在路上，遇到坑记得回来记一笔 ✍️</p>
+                    )}
                   </div>
 
                   <div className="mt-3 rounded-xl bg-sky-50/80 p-3.5 ring-1 ring-sky-100">
@@ -206,7 +243,7 @@ export default function ProjectLog() {
       {open && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-ink-900/30 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <form onSubmit={addProject} className="animate-pop-in relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-amber-100">
+          <form onSubmit={saveProject} className="animate-pop-in relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-amber-100">
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -218,9 +255,11 @@ export default function ProjectLog() {
 
             <h3 className="flex items-center gap-2 font-display text-lg font-bold">
               <Hammer className="h-5 w-5 text-wood-500" />
-              挂上新的项目
+              {editingId ? '编辑项目方案' : '挂上新的项目'}
             </h3>
-            <p className="mt-1 text-xs text-ink-400">记录下名字，坑和灵感随时回来补充 🛠️</p>
+            <p className="mt-1 text-xs text-ink-400">
+              {editingId ? '随时修改方案细节，改完点保存即可' : '记录下名字，坑和灵感随时回来补充 🛠️'}
+            </p>
 
             <div className="mt-5 space-y-4">
               <div className="flex gap-3">
@@ -354,7 +393,7 @@ export default function ProjectLog() {
                 disabled={!name.trim()}
                 className="flex-1 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-300 py-3 font-bold text-white shadow-lg shadow-amber-200 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
               >
-                挂上时间轴 🚀
+                {editingId ? '保存修改' : '挂上时间轴 🚀'}
               </button>
             </div>
           </form>

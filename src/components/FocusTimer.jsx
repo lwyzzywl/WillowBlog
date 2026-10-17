@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Pause, Play, RotateCcw, Square, Timer, X } from 'lucide-react'
 import fireConfetti from '../confetti'
 import { toast } from '../hooks'
-import { addStudySession, formatMinutes, getStudyLog, todayStudyMinutes, totalStudyMinutes } from '../studyTime'
+import { useCollection } from '../context/CloudDataProvider'
+import { createStudySession, formatMinutes, sanitizeStudyLog, todayStudyMinutes, totalStudyMinutes } from '../studyTime'
 import CircularProgress from './CircularProgress'
 
 const POMODORO_PRESETS = [15, 25, 45]
@@ -17,6 +18,7 @@ function formatClock(totalSeconds) {
 }
 
 export default function FocusTimer() {
+  const studyLog = useCollection('studyLog')
   const [panelOpen, setPanelOpen] = useState(false)
   const [mode, setMode] = useState('countup')
   const [pomodoroMin, setPomodoroMin] = useState(25)
@@ -29,6 +31,7 @@ export default function FocusTimer() {
 
   useEffect(() => {
     if (status !== 'running') return undefined
+    // 计时状态只留在内存里，每秒 setState 不会碰数据库
     const id = setInterval(() => setElapsedSec((sec) => sec + 1), 1000)
     return () => clearInterval(id)
   }, [status])
@@ -41,8 +44,10 @@ export default function FocusTimer() {
       toast('这次专注还不到 1 分钟，不记录时长，再来一次呀 🌱')
       return
     }
-    addStudySession(minutes)
-    const log = getStudyLog()
+    // 一次专注只写一次云端；本地先算好累计值给弹窗展示
+    const session = createStudySession(minutes)
+    const log = [...sanitizeStudyLog(studyLog.data), session]
+    studyLog.commit(log)
     setSettlement({
       minutes,
       completed: !!completed,
